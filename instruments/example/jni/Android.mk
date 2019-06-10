@@ -15,16 +15,10 @@
 LOCAL_PATH := $(call my-dir)
 
 include $(CLEAR_VARS)
-LOCAL_MODULE := base
-LOCAL_SRC_FILES := ../../base/obj/local/armeabi/libbase.a
-LOCAL_EXPORT_C_INCLUDES := ../../base
-include $(PREBUILT_STATIC_LIBRARY)
 
-
-include $(CLEAR_VARS)
 LOCAL_MODULE    := libexample
-LOCAL_SRC_FILES := ../epoll.c  ../epoll_arm.c.arm
+LOCAL_SRC_FILES := ../epoll.c  ../epoll_arm.c.arm ../../base/util.c ../../base/hook.c ../../base/base.c 
+LOCAL_LDLIBS    := -L./libs -ldl -llog
 LOCAL_CFLAGS := -g
-LOCAL_SHARED_LIBRARIES := dl
-LOCAL_STATIC_LIBRARIES := base
+
 include $(BUILD_SHARED_LIBRARY)

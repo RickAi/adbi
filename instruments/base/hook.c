@@ -75,6 +75,9 @@ int hook(struct hook_t *h, int pid, char *libname, char *funcname, void *hook_ar
 {
 	unsigned long int addr;
 	int i;
+	uint8_t* curr_addr;
+	uint8_t* pre_addr;
+	int count;
 
 	if (find_name(pid, funcname, libname, &addr) < 0) {
 		log("can't find: %s\n", funcname)
@@ -83,6 +86,17 @@ int hook(struct hook_t *h, int pid, char *libname, char *funcname, void *hook_ar
 	
 	log("hooking:   %s = 0x%lx ", funcname, addr)
 	strncpy(h->name, funcname, sizeof(h->name)-1);
+
+	curr_addr = (uint8_t*) addr;
+	while (*curr_addr != 0x42) {
+		log("current machine code:0x%x", *curr_addr)
+		pre_addr = curr_addr;
+		curr_addr += sizeof(uint8_t);
+	}
+	log("found target machine code:0x%x", *pre_addr)
+
+	*pre_addr = 0x80;
+	log("after change:0x%x", *pre_addr)
 
 	if (addr % 4 == 0) {
 		log("ARM using 0x%lx\n", (unsigned long)hook_arm)

@@ -380,6 +380,7 @@ static int lookup2(struct symlist *sl, unsigned char type,
 		    && ELF32_ST_TYPE(p->st_info) == type) {
 			//if (p->st_value != 0) {
 			*val = p->st_value;
+			log("match local addr:0x%x", p->st_value)
 			return 0;
 			//}
 		}

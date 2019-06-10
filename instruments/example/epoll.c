@@ -8,6 +8,7 @@
  *  License: LGPL v2.1
  *
  */
+// Modified by B.Kerler to support Android Logcat + NDK9
 
 #define _GNU_SOURCE
 #include <stdio.h>
@@ -30,11 +31,14 @@
 #include "../base/base.h"
 
 #undef log
+#include <android/log.h>
 
+#define LOGI(...) ((void)__android_log_print(ANDROID_LOG_INFO, "hooking", __VA_ARGS__))
+#define LOGE(...) ((void)__android_log_print(ANDROID_LOG_ERROR, "hooking", __VA_ARGS__)) 
 #define log(...) \
-        {FILE *fp = fopen("/data/local/tmp/adbi_example.log", "a+"); if (fp) {\
+        {FILE *fp = fopen("/data/local/tmp/adbi_example.log", "a+");\
         fprintf(fp, __VA_ARGS__);\
-        fclose(fp);}}
+        fclose(fp);}
 
 
 // this file is going to be compiled into a thumb mode binary
@@ -47,7 +51,7 @@ static struct hook_t eph;
 static int counter;
 
 // arm version of hook
-extern int my_epoll_wait_arm(int epfd, struct epoll_event *events, int maxevents, int timeout);
+extern void* my_dvmHeapSourceAlloc_arm(size_t n);
 
 /*  
  *  log function to pass to the hooking library to implement central loggin
@@ -56,22 +60,22 @@ extern int my_epoll_wait_arm(int epfd, struct epoll_event *events, int maxevents
  */
 static void my_log(char *msg)
 {
-	log("%s", msg)
+	LOGI("%s",msg);
 }
 
-int my_epoll_wait(int epfd, struct epoll_event *events, int maxevents, int timeout)
+void* my_dvmHeapSourceAlloc(size_t n)
 {
-	int (*orig_epoll_wait)(int epfd, struct epoll_event *events, int maxevents, int timeout);
-	orig_epoll_wait = (void*)eph.orig;
+	void* (*orig_dvmHeapSourceAlloc)(size_t n);
+	orig_dvmHeapSourceAlloc = (void*)eph.orig;
 
 	hook_precall(&eph);
-	int res = orig_epoll_wait(epfd, events, maxevents, timeout);
+	void* res = orig_dvmHeapSourceAlloc(n);
 	if (counter) {
 		hook_postcall(&eph);
-		log("epoll_wait() called\n");
+		LOGI("dvmHeapSourceAlloc() called\n");
 		counter--;
 		if (!counter)
-			log("removing hook for epoll_wait()\n");
+			LOGI("removing hook for dvmHeapSourceAlloc()\n");
 	}
         
 	return res;
@@ -81,10 +85,10 @@ void my_init(void)
 {
 	counter = 3;
 
-	log("%s started\n", __FILE__)
+	LOGI("%s started\n", __FILE__);
  
 	set_logfunction(my_log);
 
-	hook(&eph, getpid(), "libc.", "epoll_wait", my_epoll_wait_arm, my_epoll_wait);
+	hook(&eph, getpid(), "libdvm.", "_Z18dvmHeapSourceAllocj", my_dvmHeapSourceAlloc_arm, my_dvmHeapSourceAlloc);
 }
 

@@ -2,6 +2,7 @@
 
 cd hijack/jni
 ndk-build
+adb push ../libs/armeabi/hijack /data/local/tmp
 cd ../..
 
 cd instruments
@@ -11,6 +12,7 @@ cd ../..
 
 cd example/jni
 ndk-build
+adb push ../libs/armeabi/libexample.so /data/local/tmp
 cd ../..
 
 cd ..

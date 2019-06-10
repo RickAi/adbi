@@ -11,10 +11,11 @@
 
 #include <sys/types.h>
 #include <sys/epoll.h>
+#include <android/log.h>
 
-extern int my_epoll_wait(int epfd, struct epoll_event *events, int maxevents, int timeout);
+extern void* my_dvmHeapSourceAlloc(size_t n);
 
-int my_epoll_wait_arm(int epfd, struct epoll_event *events, int maxevents, int timeout)
+void* my_dvmHeapSourceAlloc_arm(size_t n)
 {
-	return my_epoll_wait(epfd, events, maxevents, timeout);
+	return my_dvmHeapSourceAlloc(n);
 }
