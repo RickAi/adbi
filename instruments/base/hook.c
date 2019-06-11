@@ -71,13 +71,43 @@ int hook_direct(struct hook_t *h, unsigned int addr, void *hookf)
 	return 1;
 }
 
+// http://pank4j.github.io/posts/assembling-from-scratch-encoding-blx-instruction-in-arm-thumb.html
+int32_t thumb2_blx_encode(int32_t addr, int32_t label)
+{
+	uint32_t offset = label - addr;
+
+	uint32_t S = (offset & 0x1000000) >> 24;
+	uint32_t I1 = (offset & 0x800000) >> 23;
+	uint32_t I2 = (offset & 0x400000) >> 22;
+
+	uint32_t J1 = (I1 ^ 0x1) ^ S;
+	uint32_t J2 = (I2 ^ 0x1) ^ S;
+
+	uint32_t imm10H = (offset & 0x3FF000) >> 12;
+	uint32_t imm10L = (offset & 0xFFC) >> 2;
+
+	uint32_t result = 0;
+	uint32_t high = (S << 10) | imm10H;
+	uint32_t low = (J1 << 13) | (J2 << 11) | (imm10L << 1);
+	result |= high << 16;
+	result |= low;
+	result |= 0xF000C000;
+
+	// convert to little-endian
+	// uint32_t byte0 = (result & 0xFF000000) >> 8;
+	// uint32_t byte1 = (result & 0x00FF0000) << 8;
+	// uint32_t byte2 = (result & 0x0000FF00) >> 8;
+	// uint32_t byte3 = (result & 0x000000FF) << 8;
+	// result = byte0 | byte1 | byte2 | byte3;
+
+	return result;
+}
+
 int hook(struct hook_t *h, int pid, char *libname, char *funcname, void *hook_arm, void *hook_thumb)
 {
 	unsigned long int addr;
 	int i;
-	uint8_t* curr_addr;
-	uint8_t* pre_addr;
-	int count;
+	uint16_t* curr_addr;
 
 	if (find_name(pid, funcname, libname, &addr) < 0) {
 		log("can't find: %s\n", funcname)
@@ -87,16 +117,44 @@ int hook(struct hook_t *h, int pid, char *libname, char *funcname, void *hook_ar
 	log("hooking:   %s = 0x%lx ", funcname, addr)
 	strncpy(h->name, funcname, sizeof(h->name)-1);
 
-	curr_addr = (uint8_t*) addr;
-	while (*curr_addr != 0x42) {
+	// step 1
+	curr_addr = (uint16_t*) (addr & 0xFFFFFFFE);
+	// match 0x**42
+	while ((*curr_addr >> 8) != 0x42) {
+		log("current machine code:0x%x", *curr_addr)
+		curr_addr++;
+	}
+	log("found target machine code:0x%x", *curr_addr)
+
+	// change to 0x4280 (cmp r0, r0)
+	*curr_addr = 0x4280;
+	log("after change:0x%x", *curr_addr)
+
+	// step 2
+	uint32_t blx_code = thumb2_blx_encode(0x74a26, 0x1e284);
+	log("thumb2_blx_encode machine code:0x%x", blx_code)
+
+	uint16_t blx_high = (uint16_t) (blx_code >> 16);
+	uint16_t blx_low = (uint16_t) blx_code;
+	uint16_t* pre_addr;
+	while (*pre_addr != 0xf7a9 || *curr_addr != 0xec2e) {
 		log("current machine code:0x%x", *curr_addr)
 		pre_addr = curr_addr;
-		curr_addr += sizeof(uint8_t);
+		curr_addr++;
 	}
-	log("found target machine code:0x%x", *pre_addr)
+	log("found pre_addr:0x%x, curr_addr:0x%x", *pre_addr, *curr_addr)
+	// change to 4600 (mov r0, r0)
+	*pre_addr = 0x4600;
+	*curr_addr = 0x4600;
+	log("after change, pre_addr:0x%x, curr_addr:0x%x", *pre_addr, *curr_addr)
 
-	*pre_addr = 0x80;
-	log("after change:0x%x", *pre_addr)
+	// log("change complete, start to dump:")
+	// curr_addr = (uint16_t*) (addr & 0xFFFFFFFE);
+	// while (*curr_addr != 0xe8bd) {
+	// 	log("current machine code:0x%x", *curr_addr)
+	// 	curr_addr++;
+	// }
+	// log("change complete, end")
 
 	if (addr % 4 == 0) {
 		log("ARM using 0x%lx\n", (unsigned long)hook_arm)
